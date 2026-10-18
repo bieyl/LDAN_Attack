@@ -95,8 +95,9 @@ The ensemble evaluation excludes the surrogate model when its name matches the c
 
 The supported benchmark target names are `inception_v3`, `inception_v4`,
 `inception_resnet_v2`, `resnet_v2`, `vgg16`, `vit_b_16`, and `swin_b`.
-`resnet_v2` uses the pre-activation BiT ResNet-v2 model supplied by `timm`;
-the model weights and the diffusion checkpoint are loaded by the user and are
+`resnet_v2` uses the pre-activation `preresnet152` model supplied by
+`pytorchcv`, with a `timm` ResNet-v2 fallback when `pytorchcv` is unavailable.
+The model weights and the diffusion checkpoint are loaded by the user and are
 not included in this repository.
 
 ## Reproducibility notes

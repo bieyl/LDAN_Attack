@@ -44,18 +44,21 @@ def build_classifier(name: str, pretrained: bool = True) -> nn.Module:
         except (AttributeError, TypeError):
             model = models.inception_v3(pretrained=pretrained, aux_logits=False)
     elif name in {"resnet_v2", "resnet152"}:
-        # The benchmark's ResNet-v2 is a pre-activation model.  timm exposes
-        # the published BiT ResNet-v2 weights; do not silently substitute a
-        # post-activation torchvision ResNet because that changes the target.
         try:
-            import timm
+            from pytorchcv.model_provider import get_model
+            # This is the pre-activation ResNet-152 used by the original
+            # ImageNet transfer code and by the paper's ResNet-v2 target.
+            model = get_model("preresnet152", pretrained=pretrained)
         except ImportError as exc:
-            raise RuntimeError(
-                "resnet_v2 requires timm (see requirements.txt) so that the "
-                "pre-activation ResNet-v2 target is used."
-            ) from exc
-        model = timm.create_model("resnetv2_152x2_bitm", pretrained=pretrained,
-                                  num_classes=1000)
+            try:
+                import timm
+            except ImportError as timm_exc:
+                raise RuntimeError(
+                    "resnet_v2 requires pytorchcv (preferred) or timm; "
+                    "install requirements.txt first."
+                ) from timm_exc
+            model = timm.create_model("resnetv2_152x2_bitm", pretrained=pretrained,
+                                      num_classes=1000)
     elif name in {"vgg16", "vgg_16"}:
         try:
             weights = models.VGG16_Weights.DEFAULT if pretrained else None
@@ -89,13 +92,23 @@ def build_classifier(name: str, pretrained: bool = True) -> nn.Module:
     return model
 
 
-def default_target_layer(name: str) -> str:
-    return {
+def default_target_layer(name: str, model: nn.Module | None = None) -> str:
+    candidates = {
         "inception_v3": "Mixed_7c",
         "inception_v4": "features.21",
         "inception_resnet_v2": "conv2d_7b",
-        "resnet_v2": "stages.3.blocks.2.conv3",
+        "resnet_v2": "features.stage4.unit3",
+        "resnet152": "features.stage4.unit3",
         "vgg16": "features.28",
         "vgg_16": "features.28",
-    }.get(name.lower(), "")
+    }
+    candidate = candidates.get(name.lower(), "")
+    if model is None or not candidate:
+        return candidate
+    modules = dict(model.named_modules())
+    if candidate in modules:
+        return candidate
+    if name.lower() in {"resnet_v2", "resnet152"} and "stages.3.blocks.2.conv3" in modules:
+        return "stages.3.blocks.2.conv3"
+    return candidate
 

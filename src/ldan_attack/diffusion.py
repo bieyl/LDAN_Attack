@@ -19,6 +19,9 @@ class DiffusionLatentAdapter(nn.Module):
 
     latent_channels: int = 4
 
+    def __init__(self):
+        super().__init__()
+
     def encode(self, images: Tensor, tau_star: int) -> Tensor:
         raise NotImplementedError
 

@@ -53,6 +53,14 @@ def main():
         num_workers=config.num_workers, manifest=config.train_manifest,
     )
     surrogate = build_classifier(config.surrogate, pretrained=True).to(device).eval()
+    if config.target_layer not in dict(surrogate.named_modules()):
+        if args.target_layer:
+            raise ValueError(
+                "Target layer '{}' is not present in the {} surrogate".format(
+                    config.target_layer, config.surrogate
+                )
+            )
+        config.target_layer = default_target_layer(config.surrogate, surrogate)
     if args.toy_diffusion:
         diffusion = ToyLatentAdapter().to(device)
     else:
