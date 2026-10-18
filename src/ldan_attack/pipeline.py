@@ -73,8 +73,8 @@ class LatentAttentionAttack(nn.Module):
         decoded = from_diffusion_range(decoded)
         return clip_linf(clip_image(decoded), clean, self.config.epsilon)
 
-    def _forward_pair(self, latent: Tensor, clean: Tensor, support: Tensor,
-                      eta_a: Tensor, eta_b: Tensor):
+    def _forward_pair(self, latent: Tensor, clean: Tensor, labels: Tensor,
+                      support: Tensor, eta_a: Tensor, eta_b: Tensor):
         mask = self.neighborhood.to_mask(support, latent.shape[-2:])
         residual_a = self.generator(latent, eta_a) * mask
         residual_b = self.generator(latent, eta_b) * mask
@@ -84,15 +84,14 @@ class LatentAttentionAttack(nn.Module):
         input_b = preprocess(adversarial_b)
         logits_a = unwrap_logits(self.surrogate(input_a))
         logits_b = unwrap_logits(self.surrogate(input_b))
-        attention_a = self.attention(input_a, self._labels, create_graph=True)
-        attention_b = self.attention(input_b, self._labels, create_graph=True)
+        attention_a = self.attention(input_a, labels, create_graph=True)
+        attention_b = self.attention(input_b, labels, create_graph=True)
         return adversarial_a, adversarial_b, logits_a, logits_b, attention_a, attention_b
 
     def training_step(self, images: Tensor, labels: Tensor) -> Dict[str, Tensor]:
         """Compute the paper objective for one mini-batch."""
         if not self.initialized:
             self.initialize(images, labels)
-        self._labels = labels
         with torch.no_grad():
             latent = self.diffusion.encode(to_diffusion_range(images), self.config.tau_star)
         with torch.enable_grad():
@@ -107,7 +106,7 @@ class LatentAttentionAttack(nn.Module):
             )
             eta_b = torch.randn_like(eta_a)
             _, _, logits_a, logits_b, attention_a, attention_b = self._forward_pair(
-                latent, images, support, eta_a, eta_b
+                latent, images, labels, support, eta_a, eta_b
             )
             losses["adv"].append(
                 0.5 * (attack_loss(logits_a, labels) + attack_loss(logits_b, labels))
