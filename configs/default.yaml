@@ -23,10 +23,12 @@ surrogate: inception_v3
 target_layer: Mixed_7c
 diffusion_model: runwayml/stable-diffusion-v1-5
 diffusion_dtype: float32
-train_dir: ./data/imagenet/train
+train_dir: ./data/imagenet/val
 eval_dir: ./data/nips2017
 train_manifest: null
 eval_manifest: null
+train_images: 10000
+eval_images: 1000
 output_dir: ./outputs
 checkpoint_dir: ./checkpoints
 device: cuda

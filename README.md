@@ -44,13 +44,17 @@ The default configuration uses the public Stable Diffusion v1.5 checkpoint throu
 
 ## Data
 
-The experiments use the public ImageNet validation images for generator training and the NeurIPS 2017 adversarial competition images for transfer evaluation. The auxiliary robustness experiment uses the public Caltech101 dataset. The repository intentionally contains no data and does not require a dataset download during installation.
+The experiments use 10,000 randomly selected images from the public ImageNet
+validation set for generator training and 1,000 images from the NeurIPS 2017
+adversarial competition set for transfer evaluation. The auxiliary robustness
+experiment uses the public Caltech101 dataset. The repository intentionally
+contains no data and does not require a dataset download during installation.
 
 Arrange an ImageFolder-compatible layout, or change `train_dir` and `eval_dir` in the YAML configuration:
 
 ```text
 data/
-  imagenet/train/<class>/*.JPEG
+  imagenet/val/<class>/*.JPEG
   nips2017/<class>/*
 ```
 
@@ -60,7 +64,10 @@ For a flat evaluation directory, provide a manifest instead. Set
 
 ## Training
 
-The following command trains the proposed method with the paper defaults. `--use-ddim` enables the full DDIM inverse/denoise path and requires a complete Stable Diffusion checkpoint.
+The following command trains the proposed method with the paper defaults. The
+scripts use the full DDIM inverse/denoise path by default and require a
+complete Stable Diffusion checkpoint. The `--no-ddim` option is available only
+for debugging the VAE-only adapter.
 
 ```bash
 python scripts/train_generator.py \
@@ -69,6 +76,10 @@ python scripts/train_generator.py \
   --target-layer Mixed_7c \
   --use-ddim
 ```
+
+The training checkpoint records whether DDIM was enabled. Generation and
+evaluation restore that setting by default; pass `--use-ddim` or `--no-ddim`
+explicitly when an override is needed.
 
 For a quick tensor-shape check without a diffusion checkpoint, run:
 

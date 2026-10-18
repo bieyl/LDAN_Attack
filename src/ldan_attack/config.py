@@ -33,10 +33,12 @@ class AttackConfig:
     target_layer: str = "Mixed_7c"
     diffusion_model: str = "runwayml/stable-diffusion-v1-5"
     diffusion_dtype: str = "float32"
-    train_dir: str = "./data/imagenet/train"
+    train_dir: str = "./data/imagenet/val"
     eval_dir: str = "./data/nips2017"
     train_manifest: Optional[str] = None
     eval_manifest: Optional[str] = None
+    train_images: Optional[int] = 10000
+    eval_images: Optional[int] = 1000
     output_dir: str = "./outputs"
     checkpoint_dir: str = "./checkpoints"
     device: str = "cuda"
@@ -81,7 +83,8 @@ class AttackConfig:
             "image_size", "epsilon", "diffusion_steps", "tau_star", "radius",
             "neighborhood_samples", "latent_dim", "lambda_attn", "lambda_div",
             "diversity_eps", "projection_eps", "normalization_eps", "surrogate",
-            "target_layer", "diffusion_model", "diffusion_dtype",
+            "target_layer", "diffusion_model", "diffusion_dtype", "train_images",
+            "eval_images",
         }
         for name in fields:
             if name in values:

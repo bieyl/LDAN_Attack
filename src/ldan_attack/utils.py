@@ -82,7 +82,8 @@ class ManifestImageDataset(Dataset):
 
 
 def make_imagefolder(path: str, image_size: int, batch_size: int, shuffle: bool,
-                     num_workers: int = 4, manifest: Optional[str] = None) -> DataLoader:
+                     num_workers: int = 4, manifest: Optional[str] = None,
+                     max_samples: Optional[int] = None, seed: Optional[int] = None) -> DataLoader:
     transform = transforms.Compose([
         transforms.Resize((image_size, image_size)),
         transforms.ToTensor(),
@@ -98,6 +99,10 @@ def make_imagefolder(path: str, image_size: int, batch_size: int, shuffle: bool,
         dataset = ManifestImageDataset(path, manifest_path, image_size)
     else:
         dataset = ImageFolder(path, transform=transform)
+    if max_samples is not None and max_samples > 0 and len(dataset) > max_samples:
+        generator = random.Random(seed)
+        indices = generator.sample(range(len(dataset)), max_samples)
+        dataset = torch.utils.data.Subset(dataset, indices)
     return DataLoader(
         dataset,
         batch_size=batch_size,

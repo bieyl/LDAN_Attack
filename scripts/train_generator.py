@@ -25,7 +25,10 @@ def parse_args():
     parser.add_argument("--surrogate", default=None)
     parser.add_argument("--target-layer", default=None)
     parser.add_argument("--device", default=None)
-    parser.add_argument("--use-ddim", action="store_true")
+    parser.add_argument("--use-ddim", dest="use_ddim", action="store_true", default=True,
+                        help="Use the paper's DDIM inversion/denoising path (default).")
+    parser.add_argument("--no-ddim", dest="use_ddim", action="store_false",
+                        help="Use the VAE-only adapter for debugging; not a paper run.")
     parser.add_argument("--toy-diffusion", action="store_true",
                         help="Use the shape-test adapter; never use it for paper results.")
     return parser.parse_args()
@@ -51,6 +54,7 @@ def main():
     loader = make_imagefolder(
         config.train_dir, config.image_size, config.batch_size, shuffle=True,
         num_workers=config.num_workers, manifest=config.train_manifest,
+        max_samples=config.train_images, seed=config.seed,
     )
     surrogate = build_classifier(config.surrogate, pretrained=True).to(device).eval()
     if config.target_layer not in dict(surrogate.named_modules()):
@@ -110,6 +114,7 @@ def main():
         "config": config.__dict__,
         "surrogate": config.surrogate,
         "target_layer": config.target_layer,
+        "use_ddim": bool(args.use_ddim),
     }
     path = output_dir / (config.surrogate + "_latent_attention.pt")
     torch.save(checkpoint, path)
