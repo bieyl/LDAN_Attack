@@ -18,5 +18,8 @@ class ToyLatentAdapter(DiffusionLatentAdapter):
 
     def decode(self, latents: Tensor, tau_star: int, output_size) -> Tensor:
         rgb = latents[:, :3]
-        return F.interpolate(rgb, size=output_size, mode="bilinear", align_corners=False)
+        rgb = F.interpolate(rgb, size=output_size, mode="bilinear", align_corners=False)
+        # Match the real diffusion adapter contract: decoder outputs are in
+        # [-1, 1] before the pipeline maps them to [0, 1].
+        return rgb.tanh()
 

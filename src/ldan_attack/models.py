@@ -1,8 +1,6 @@
 """Classifier construction and ImageNet preprocessing."""
 
 from dataclasses import dataclass
-from typing import Dict, Tuple
-
 import torch
 from torch import Tensor, nn
 
@@ -40,18 +38,28 @@ def build_classifier(name: str, pretrained: bool = True) -> nn.Module:
     name = name.lower()
     if name == "inception_v3":
         try:
-            model = models.inception_v3(weights=models.Inception_V3_Weights.DEFAULT,
+            weights = models.Inception_V3_Weights.DEFAULT if pretrained else None
+            model = models.inception_v3(weights=weights,
                                         aux_logits=False)
         except (AttributeError, TypeError):
             model = models.inception_v3(pretrained=pretrained, aux_logits=False)
     elif name in {"resnet_v2", "resnet152"}:
+        # The benchmark's ResNet-v2 is a pre-activation model.  timm exposes
+        # the published BiT ResNet-v2 weights; do not silently substitute a
+        # post-activation torchvision ResNet because that changes the target.
         try:
-            model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
-        except (AttributeError, TypeError):
-            model = models.resnet152(pretrained=pretrained)
+            import timm
+        except ImportError as exc:
+            raise RuntimeError(
+                "resnet_v2 requires timm (see requirements.txt) so that the "
+                "pre-activation ResNet-v2 target is used."
+            ) from exc
+        model = timm.create_model("resnetv2_152x2_bitm", pretrained=pretrained,
+                                  num_classes=1000)
     elif name in {"vgg16", "vgg_16"}:
         try:
-            model = models.vgg16(weights=models.VGG16_Weights.DEFAULT)
+            weights = models.VGG16_Weights.DEFAULT if pretrained else None
+            model = models.vgg16(weights=weights)
         except (AttributeError, TypeError):
             model = models.vgg16(pretrained=pretrained)
     elif name in {"inception_v4", "inception_resnet_v2"}:
@@ -64,6 +72,18 @@ def build_classifier(name: str, pretrained: bool = True) -> nn.Module:
         model = pretrainedmodels.__dict__[name.replace("_", "")](
             num_classes=1000, pretrained="imagenet" if pretrained else None
         )
+    elif name in {"vit_b_16", "vit_b16", "vit-b/16"}:
+        try:
+            weights = models.ViT_B_16_Weights.DEFAULT if pretrained else None
+            model = models.vit_b_16(weights=weights)
+        except (AttributeError, TypeError):
+            model = models.vit_b_16(pretrained=pretrained)
+    elif name in {"swin_b", "swin-b"}:
+        try:
+            weights = models.Swin_B_Weights.DEFAULT if pretrained else None
+            model = models.swin_b(weights=weights)
+        except (AttributeError, TypeError):
+            model = models.swin_b(pretrained=pretrained)
     else:
         raise ValueError("Unsupported classifier '{}'.".format(name))
     return model
@@ -74,7 +94,7 @@ def default_target_layer(name: str) -> str:
         "inception_v3": "Mixed_7c",
         "inception_v4": "features.21",
         "inception_resnet_v2": "conv2d_7b",
-        "resnet_v2": "layer4.2.conv3",
+        "resnet_v2": "stages.3.blocks.2.conv3",
         "vgg16": "features.28",
         "vgg_16": "features.28",
     }.get(name.lower(), "")

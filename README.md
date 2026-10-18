@@ -52,6 +52,10 @@ data/
   nips2017/<class>/*
 ```
 
+For a flat evaluation directory, provide a manifest instead. Set
+`eval_manifest: labels.csv`; the CSV must contain a header with `filename` (or
+`path`) and integer `label` columns, with paths relative to `eval_dir`.
+
 ## Training
 
 The following command trains the proposed method with the paper defaults. `--use-ddim` enables the full DDIM inverse/denoise path and requires a complete Stable Diffusion checkpoint.
@@ -83,15 +87,33 @@ python scripts/generate_attack.py \
 python scripts/evaluate.py \
   --config configs/default.yaml \
   --checkpoint checkpoints/inception_v3_latent_attention.pt \
-  --targets inception_v3 inception_v4 inception_resnet_v2 resnet_v2 vgg16 \
+  --targets inception_v3 inception_v4 inception_resnet_v2 resnet_v2 vgg16 vit_b_16 swin_b \
   --use-ddim
 ```
 
 The ensemble evaluation excludes the surrogate model when its name matches the configured source model. The target models remain frozen and are used only for evaluation.
 
+The supported benchmark target names are `inception_v3`, `inception_v4`,
+`inception_resnet_v2`, `resnet_v2`, `vgg16`, `vit_b_16`, and `swin_b`.
+`resnet_v2` uses the pre-activation BiT ResNet-v2 model supplied by `timm`;
+the model weights and the diffusion checkpoint are loaded by the user and are
+not included in this repository.
+
 ## Reproducibility notes
 
 The attack uses `N_diff=50`, `tau*=25`, `r=0.10`, `K=2`, `epsilon=16/255`, `lambda_attn=10`, and `lambda_div=1000` by default. The exact diffusion checkpoint, scheduler version, target layer, preprocessing, and random seed should be recorded with every run. Do not commit private checkpoints or generated adversarial images.
+
+The default diffusion arithmetic is float32 because training differentiates
+through the frozen decoder and the attention losses. Set `diffusion_dtype` to
+`float16` only when the hardware and the installed checkpoint have been
+validated with mixed-precision training.
+
+The repository provides the method implementation and saves the attack-shape
+and diffusion settings in each generator checkpoint. Numerical reproduction
+also requires supplying the same diffusion/classifier weights and benchmark
+labels used for the reported tables. The included smoke test checks tensor
+shapes and gradient connectivity only; it is not a substitute for the
+ImageNet/NeurIPS evaluation.
 
 ## Citation
 

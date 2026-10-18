@@ -36,6 +36,8 @@ def main():
     config = AttackConfig.from_yaml(args.config)
     if args.surrogate:
         config.surrogate = args.surrogate
+        if not args.target_layer:
+            config.target_layer = default_target_layer(config.surrogate)
     if args.target_layer:
         config.target_layer = args.target_layer
     elif not config.target_layer:
@@ -43,11 +45,12 @@ def main():
     if args.device:
         config.device = args.device
     device = torch.device(config.resolve_device())
+    diffusion_dtype = torch.float16 if config.diffusion_dtype.lower() in {"float16", "fp16"} else torch.float32
     seed_everything(config.seed)
 
     loader = make_imagefolder(
         config.train_dir, config.image_size, config.batch_size, shuffle=True,
-        num_workers=config.num_workers,
+        num_workers=config.num_workers, manifest=config.train_manifest,
     )
     surrogate = build_classifier(config.surrogate, pretrained=True).to(device).eval()
     if args.toy_diffusion:
@@ -58,6 +61,7 @@ def main():
             device=device,
             diffusion_steps=config.diffusion_steps,
             use_ddim=args.use_ddim,
+            dtype=diffusion_dtype,
         )
     attack = LatentAttentionAttack(surrogate, diffusion, config).to(device)
 

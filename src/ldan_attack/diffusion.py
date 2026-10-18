@@ -11,6 +11,7 @@ from typing import Optional
 
 import torch
 from torch import Tensor, nn
+import torch.nn.functional as F
 
 
 class DiffusionLatentAdapter(nn.Module):
@@ -42,7 +43,10 @@ class DiffusersLatentAdapter(DiffusionLatentAdapter):
         self.device = device
         self.use_ddim = use_ddim
         self.diffusion_steps = diffusion_steps
-        dtype = dtype or (torch.float16 if device.type == "cuda" else torch.float32)
+        # The training objective differentiates through the frozen decoder.
+        # Float32 is the safe default; callers may opt into fp16 explicitly.
+        dtype = dtype or torch.float32
+        self.compute_dtype = dtype
         self.vae = AutoencoderKL.from_pretrained(model_id, subfolder="vae", torch_dtype=dtype)
         self.vae.to(device).eval()
         self.unet = None
@@ -91,13 +95,13 @@ class DiffusersLatentAdapter(DiffusionLatentAdapter):
 
     def _vae_encode(self, images: Tensor) -> Tensor:
         # VAE expects image coordinates in [-1, 1].
-        posterior = self.vae.encode(images).latent_dist
+        posterior = self.vae.encode(images.to(self.compute_dtype)).latent_dist
         return posterior.mean * self.scaling_factor
 
     def encode(self, images: Tensor, tau_star: int) -> Tensor:
         latents = self._vae_encode(images)
         if not self.use_ddim:
-            return latents
+            return latents.float()
         self.inverse_scheduler.set_timesteps(self.diffusion_steps, device=images.device)
         embeddings = self._empty_prompt_embeddings(images.shape[0])
         # DDIM inversion moves from the clean latent toward the requested
@@ -107,12 +111,16 @@ class DiffusersLatentAdapter(DiffusionLatentAdapter):
                 latents, timestep, encoder_hidden_states=embeddings
             ).sample
             latents = self.inverse_scheduler.step(prediction, timestep, latents).prev_sample
-        return latents
+        return latents.float()
 
     def decode(self, latents: Tensor, tau_star: int, output_size) -> Tensor:
+        latents = latents.to(self.compute_dtype)
         if not self.use_ddim:
             decoded = self.vae.decode(latents / self.scaling_factor).sample
-            return decoded
+            decoded = decoded.float()
+            return decoded if decoded.shape[-2:] == tuple(output_size) else F.interpolate(
+                decoded, size=output_size, mode="bilinear", align_corners=False
+            )
         self.scheduler.set_timesteps(self.diffusion_steps, device=latents.device)
         embeddings = self._empty_prompt_embeddings(latents.shape[0])
         # The scheduler stores descending denoising timesteps.  Starting at
@@ -126,5 +134,8 @@ class DiffusersLatentAdapter(DiffusionLatentAdapter):
             ).sample
             sample = self.scheduler.step(prediction, timestep, sample).prev_sample
         decoded = self.vae.decode(sample / self.scaling_factor).sample
-        return decoded
+        decoded = decoded.float()
+        return decoded if decoded.shape[-2:] == tuple(output_size) else F.interpolate(
+            decoded, size=output_size, mode="bilinear", align_corners=False
+        )
 

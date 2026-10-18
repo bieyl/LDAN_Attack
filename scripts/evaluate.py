@@ -33,7 +33,7 @@ def main():
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--targets", nargs="+",
                         default=["inception_v3", "inception_v4", "inception_resnet_v2",
-                                 "resnet_v2", "vgg16"])
+                                 "resnet_v2", "vgg16", "vit_b_16", "swin_b"])
     parser.add_argument("--device", default=None)
     parser.add_argument("--use-ddim", action="store_true")
     parser.add_argument("--output", default="./outputs/evaluation.json")
@@ -41,16 +41,26 @@ def main():
     config = AttackConfig.from_yaml(args.config)
     if args.device:
         config.device = args.device
+    checkpoint = torch.load(args.checkpoint, map_location="cpu")
+    config.apply_checkpoint_settings(checkpoint.get("config", {}))
+    if checkpoint.get("surrogate"):
+        config.surrogate = checkpoint["surrogate"]
+    if checkpoint.get("target_layer"):
+        config.target_layer = checkpoint["target_layer"]
     device = torch.device(config.resolve_device())
+    diffusion_dtype = torch.float16 if config.diffusion_dtype.lower() in {"float16", "fp16"} else torch.float32
     loader = make_imagefolder(config.eval_dir, config.image_size, config.batch_size, False,
-                              config.num_workers)
+                              config.num_workers, manifest=config.eval_manifest)
     surrogate = build_classifier(config.surrogate, pretrained=True).to(device).eval()
     diffusion = DiffusersLatentAdapter(
         config.diffusion_model, device=device, diffusion_steps=config.diffusion_steps,
-        use_ddim=args.use_ddim,
+        use_ddim=args.use_ddim, dtype=diffusion_dtype,
     )
     attack = LatentAttentionAttack(surrogate, diffusion, config).to(device)
-    checkpoint = torch.load(args.checkpoint, map_location=device)
+    checkpoint = {
+        key: value.to(device) if isinstance(value, torch.Tensor) else value
+        for key, value in checkpoint.items()
+    }
     totals = {name: 0 for name in args.targets}
     total = 0
     ensemble_success = 0
@@ -62,14 +72,22 @@ def main():
         attack.generator.load_state_dict(checkpoint["generator"])
         attack.neighborhood.load_state_dict(checkpoint["neighborhood"])
         adversarial = attack.generate(images, labels, samples=1)[:, 0]
-        ensemble_logits = None
-        for name, model in models.items():
-            logits = output_logits(model, preprocess(adversarial))
-            predictions = logits.argmax(dim=1)
-            totals[name] += int((predictions != labels).sum())
-            if name != config.surrogate:
-                ensemble_logits = logits if ensemble_logits is None else ensemble_logits + logits
-        ensemble_success += int((ensemble_logits.argmax(dim=1) != labels).sum())
+        ensemble_probs = None
+        with torch.no_grad():
+            for name, model in models.items():
+                logits = output_logits(model, preprocess(adversarial))
+                predictions = logits.argmax(dim=1)
+                totals[name] += int((predictions != labels).sum())
+                if name != config.surrogate:
+                    probs = torch.softmax(logits, dim=1)
+                    ensemble_probs = probs if ensemble_probs is None else ensemble_probs + probs
+        if ensemble_probs is None:
+            raise ValueError(
+                "The ensemble requires at least one target model other than the surrogate."
+            )
+        non_source_count = sum(name != config.surrogate for name in models)
+        ensemble_probs = ensemble_probs / non_source_count
+        ensemble_success += int((ensemble_probs.argmax(dim=1) != labels).sum())
         total += labels.numel()
     report = {name: 100.0 * value / max(total, 1) for name, value in totals.items()}
     report["ensemble_excluding_surrogate"] = 100.0 * ensemble_success / max(total, 1)

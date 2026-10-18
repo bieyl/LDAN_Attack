@@ -32,8 +32,11 @@ class AttackConfig:
     surrogate: str = "inception_v3"
     target_layer: str = "Mixed_7c"
     diffusion_model: str = "runwayml/stable-diffusion-v1-5"
+    diffusion_dtype: str = "float32"
     train_dir: str = "./data/imagenet/train"
     eval_dir: str = "./data/nips2017"
+    train_manifest: Optional[str] = None
+    eval_manifest: Optional[str] = None
     output_dir: str = "./outputs"
     checkpoint_dir: str = "./checkpoints"
     device: str = "cuda"
@@ -67,4 +70,21 @@ class AttackConfig:
             return "cuda" if torch.cuda.is_available() else "cpu"
         except ImportError:
             return "cpu"
+
+    def apply_checkpoint_settings(self, values: Dict[str, Any]) -> "AttackConfig":
+        """Restore attack-shape and diffusion settings saved with a checkpoint.
+
+        Dataset locations, worker count, output paths, and the requested
+        device stay under the caller's control.
+        """
+        fields = {
+            "image_size", "epsilon", "diffusion_steps", "tau_star", "radius",
+            "neighborhood_samples", "latent_dim", "lambda_attn", "lambda_div",
+            "diversity_eps", "projection_eps", "normalization_eps", "surrogate",
+            "target_layer", "diffusion_model", "diffusion_dtype",
+        }
+        for name in fields:
+            if name in values:
+                setattr(self, name, values[name])
+        return self
 
