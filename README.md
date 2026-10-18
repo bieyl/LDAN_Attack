@@ -2,14 +2,16 @@
 
 This repository contains the PyTorch implementation of **Latent diffusion-based attention-guided neighborhood perturbation for transferable adversarial attacks**.
 
-The implementation follows the paper's training pipeline:
+## Overview
 
-1. a frozen latent-diffusion backbone maps an input image to a latent representation;
-2. a frozen surrogate classifier provides a channel-wise Grad-CAM tensor;
-3. a learnable sampler draws an attention support inside a Frobenius ball and maps it to a latent gate;
-4. a latent residual generator produces two perturbations under the same support;
-5. the objective combines surrogate attack loss, neighborhood alignment, and attention-space diversity;
-6. decoded images are clipped to the image-space $L_\infty$ budget before evaluation.
+The pipeline trains a perturbation generator in the latent space of a frozen
+diffusion model. A frozen surrogate classifier provides a channel-wise Grad-CAM
+representation, and a learnable sampler explores a Frobenius neighborhood of
+that representation before mapping it to a latent gating mask. Two latent codes
+are sampled under the same attention support, and the generator is optimized
+with the untargeted surrogate loss, neighborhood alignment, and attention-space
+diversity terms. The decoded outputs are clipped to the image-space
+L-infinity budget before evaluation.
 
 The repository does not include datasets, model checkpoints, generated images, or diffusion weights. They must be supplied by the user under the paths in `configs/default.yaml`.
 
@@ -123,8 +125,7 @@ ImageNet/NeurIPS evaluation.
   title={Latent diffusion-based attention-guided neighborhood perturbation for transferable adversarial attacks},
   author={Bie, Yunlong and Sun, Jiaze},
   journal={Image and Vision Computing},
-  year={2026},
-  note={Manuscript ID: IMAVIS-D-26-01040}
+  year={2026}
 }
 ```
 
