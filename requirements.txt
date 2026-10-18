@@ -1,0 +1,10 @@
+torch>=2.1
+torchvision>=0.16
+diffusers>=0.25
+transformers>=4.36
+accelerate>=0.25
+pretrainedmodels>=0.7.4
+numpy>=1.24
+Pillow>=9.5
+PyYAML>=6.0
+tqdm>=4.66

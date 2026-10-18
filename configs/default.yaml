@@ -1,0 +1,29 @@
+# Defaults used by the paper's ImageNet transfer setting.
+image_size: 224
+epsilon: 0.06274509803921569  # 16/255 in normalized image coordinates
+diffusion_steps: 50
+tau_star: 25
+radius: 0.10
+neighborhood_samples: 2
+latent_dim: 16
+lambda_attn: 10.0
+lambda_div: 1000.0
+diversity_eps: 1.0e-8
+projection_eps: 1.0e-8
+normalization_eps: 1.0e-6
+generator_epochs: 100
+batch_size: 8
+learning_rate: 0.0001
+weight_decay: 0.00001
+adam_beta1: 0.5
+adam_beta2: 0.999
+num_workers: 4
+seed: 2024
+surrogate: inception_v3
+target_layer: Mixed_7c
+diffusion_model: runwayml/stable-diffusion-v1-5
+train_dir: ./data/imagenet/train
+eval_dir: ./data/nips2017
+output_dir: ./outputs
+checkpoint_dir: ./checkpoints
+device: cuda
