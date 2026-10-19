@@ -7,10 +7,10 @@ This repository contains the PyTorch implementation of **Latent diffusion-based 
 The pipeline trains a perturbation generator in the latent space of a frozen
 diffusion model. A frozen surrogate classifier provides a channel-wise Grad-CAM
 representation, and a learnable sampler explores a Frobenius neighborhood of
-that representation before mapping it to a latent gating mask. Two latent codes
-are sampled under the same attention support, and the generator is optimized
-with the untargeted surrogate loss, neighborhood alignment, and attention-space
-diversity terms. The decoded outputs are clipped to the image-space
+that representation before mapping it to a latent gating mask. During training,
+two latent codes are sampled under the same attention support, and the
+generator is optimized with the untargeted surrogate loss, neighborhood
+alignment, and attention-space diversity terms. The decoded outputs are clipped to the image-space
 L-infinity budget before evaluation.
 
 The repository does not include datasets, model checkpoints, generated images, or diffusion weights. They must be supplied by the user under the paths in `configs/default.yaml`.
