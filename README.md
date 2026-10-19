@@ -115,19 +115,27 @@ not included in this repository.
 
 ## Reproducibility notes
 
-The attack uses `N_diff=50`, `tau*=25`, `r=0.10`, `K=2`, `epsilon=16/255`, `lambda_attn=10`, and `lambda_div=1000` by default. The exact diffusion checkpoint, scheduler version, target layer, preprocessing, and random seed should be recorded with every run. Do not commit private checkpoints or generated adversarial images.
+The paper configuration uses `N_diff=50`, `tau*=25`, `r=0.10`, `K=2`,
+`epsilon=16/255`, `lambda_attn=10`, and `lambda_div=1000`. Here, `K` is the
+number of sampled attention supports per training example. The exact diffusion
+checkpoint, scheduler and library versions, surrogate model and target layer,
+preprocessing, data manifest, and random seed should be recorded with every
+run. Do not commit private checkpoints or generated adversarial images.
 
-The default diffusion arithmetic is float32 because training differentiates
-through the frozen decoder and the attention losses. Set `diffusion_dtype` to
-`float16` only when the hardware and the installed checkpoint have been
-validated with mixed-precision training.
+The default diffusion arithmetic is `float32` because training differentiates
+through the frozen denoising and decoder path with respect to the latent
+variables. Set
+`diffusion_dtype` to `float16` only after validating mixed-precision training
+with the selected hardware, checkpoint, and Diffusers version.
 
-The repository provides the method implementation and saves the attack-shape
-and diffusion settings in each generator checkpoint. Numerical reproduction
-also requires supplying the same diffusion/classifier weights and benchmark
-labels used for the reported tables. The included smoke test checks tensor
-shapes and gradient connectivity only; it is not a substitute for the
-ImageNet/NeurIPS evaluation.
+The repository provides the method implementation and stores the attack-shape
+and diffusion configuration in each generator checkpoint. The checkpoint does
+not contain the diffusion or classifier weights, software-version metadata, or
+benchmark labels. Numerical reproduction therefore requires supplying the same
+model weights, scheduler/library versions, preprocessing, and labels used for
+the reported tables. The included smoke test uses a tiny classifier and the
+toy latent adapter; it checks tensor shapes, finite losses, and backward
+connectivity, but it is not a substitute for the ImageNet/NeurIPS evaluation.
 
 ## Citation
 
