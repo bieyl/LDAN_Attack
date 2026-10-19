@@ -35,7 +35,7 @@ The code targets Python 3.10 or newer and a CUDA-enabled PyTorch installation fo
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate       # Windows: .venv\\Scripts\\activate
+source .venv/bin/activate       # Windows PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
@@ -140,10 +140,9 @@ connectivity, but it is not a substitute for the ImageNet/NeurIPS evaluation.
 ## Citation
 
 ```bibtex
-@article{bie2026latentattention,
+@misc{bie2026latentattention,
   title={Latent diffusion-based attention-guided neighborhood perturbation for transferable adversarial attacks},
   author={Bie, Yunlong and Sun, Jiaze},
-  journal={Image and Vision Computing},
   year={2026}
 }
 ```
