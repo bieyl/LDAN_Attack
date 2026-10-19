@@ -4,16 +4,9 @@ This repository contains the PyTorch implementation of **Latent diffusion-based 
 
 ## Overview
 
-The pipeline trains a perturbation generator in the latent space of a frozen
-diffusion model. A frozen surrogate classifier provides a channel-wise Grad-CAM
-representation, and a learnable sampler explores a Frobenius neighborhood of
-that representation before mapping it to a latent gating mask. During training,
-two latent codes are sampled under the same attention support, and the
-generator is optimized with the untargeted surrogate loss, neighborhood
-alignment, and attention-space diversity terms. The decoded outputs are clipped
-to the image-space L-infinity budget before evaluation.
+The method trains a perturbation generator in the latent space of a frozen diffusion model. A frozen surrogate classifier provides a channel-wise Grad-CAM representation. A learnable sampler explores a Frobenius neighborhood of that representation and maps each sampled support to a latent gating mask. During training, two latent codes share the same attention support, and the generator is optimized with the untargeted surrogate loss, neighborhood alignment, and attention-space diversity terms. The decoded outputs are clipped to the image-space $L_{\infty}$ budget before evaluation.
 
-The repository does not include datasets, model checkpoints, generated images, or diffusion weights. They must be supplied by the user under the paths in `configs/default.yaml`.
+The public implementation follows the paper's DDIM inversion and denoising path. It requires the complete diffusion checkpoint and the classifier weights supplied by the user. Datasets, checkpoints, generated images, and diffusion weights are intentionally excluded from this repository.
 
 ## Repository layout
 
@@ -23,7 +16,6 @@ src/ldan_attack/           Diffusion, attention, generator, losses, and pipeline
 scripts/train_generator.py Train the latent perturbation generator
 scripts/generate_attack.py Generate adversarial images
 scripts/evaluate.py        Evaluate target-model and ensemble ASR
-scripts/smoke_test.py      Dependency/runtime shape test
 data/README.md             Public dataset description
 checkpoints/README.md      Checkpoint policy
 outputs/                   Ignored generated outputs
@@ -31,7 +23,7 @@ outputs/                   Ignored generated outputs
 
 ## Environment
 
-The code targets Python 3.10 or newer and a CUDA-enabled PyTorch installation for practical training. Install the Python dependencies with:
+The code targets Python 3.10 or newer and a CUDA-enabled PyTorch installation for practical training. Install the dependencies with:
 
 ```bash
 python -m venv .venv
@@ -40,15 +32,11 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-The default configuration uses the public Stable Diffusion v1.5 checkpoint through Diffusers. The checkpoint is not redistributed here; set `diffusion_model` to the locally available checkpoint identifier or path.
+The default configuration uses the public Stable Diffusion v1.5 checkpoint through Diffusers. The checkpoint is not redistributed here; set `diffusion_model` to the locally available checkpoint identifier or path. The implementation uses DDIM inversion and denoising with the fixed operating point specified in the configuration.
 
 ## Data
 
-The experiments use 10,000 randomly selected images from the public ImageNet
-validation set for generator training and 1,000 images from the NeurIPS 2017
-adversarial competition set for transfer evaluation. The auxiliary robustness
-experiment uses the public Caltech101 dataset. The repository intentionally
-contains no data and does not require a dataset download during installation.
+The experiments use 10,000 randomly selected images from the public ImageNet validation set for generator training and 1,000 images from the NeurIPS 2017 adversarial competition set for transfer evaluation. The auxiliary robustness experiment uses the public Caltech101 dataset. The repository contains no data and does not require a dataset download during installation.
 
 Arrange an ImageFolder-compatible layout, or change `train_dir` and `eval_dir` in the YAML configuration:
 
@@ -58,84 +46,45 @@ data/
   nips2017/<class>/*
 ```
 
-For a flat evaluation directory, provide a manifest instead. Set
-`eval_manifest: labels.csv`; the CSV must contain a header with `filename` (or
-`path`) and integer `label` columns, with paths relative to `eval_dir`.
+For a flat evaluation directory, provide a manifest instead. Set `eval_manifest: labels.csv`; the CSV must contain a header with `filename` (or `path`) and integer `label` columns, with paths relative to `eval_dir`.
 
 ## Training
 
-The following command trains the proposed method with the paper defaults. The
-scripts use the full DDIM inverse/denoise path by default and require a
-complete Stable Diffusion checkpoint. The `--no-ddim` option is available only
-for debugging the VAE-only adapter.
+The following command trains the proposed method with the paper defaults. It loads the supplied Stable Diffusion checkpoint and uses the full DDIM inversion and denoising path.
 
 ```bash
 python scripts/train_generator.py \
   --config configs/default.yaml \
   --surrogate inception_v3 \
-  --target-layer Mixed_7c \
-  --use-ddim
+  --target-layer Mixed_7c
 ```
 
-The training checkpoint records whether DDIM was enabled. Generation and
-evaluation restore that setting by default; pass `--use-ddim` or `--no-ddim`
-explicitly when an override is needed.
-
-For a quick tensor-shape check without a diffusion checkpoint, run:
-
-```bash
-python scripts/smoke_test.py
-```
-
-The toy adapter is for software tests only and must not be used to reproduce paper results.
+The training checkpoint stores the attack configuration, source model, and target layer used for the run. Generation and evaluation restore the configuration saved with the checkpoint.
 
 ## Generation and evaluation
 
 ```bash
 python scripts/generate_attack.py \
   --config configs/default.yaml \
-  --checkpoint checkpoints/inception_v3_latent_attention.pt \
-  --use-ddim
+  --checkpoint checkpoints/inception_v3_latent_attention.pt
 
 python scripts/evaluate.py \
   --config configs/default.yaml \
   --checkpoint checkpoints/inception_v3_latent_attention.pt \
-  --targets inception_v3 inception_v4 inception_resnet_v2 resnet_v2 vgg16 vit_b_16 swin_b \
-  --use-ddim
+  --targets inception_v3 inception_v4 inception_resnet_v2 resnet_v2 vgg16 vit_b_16 swin_b
 ```
 
 The ensemble evaluation excludes the surrogate model when its name matches the configured source model. The target models remain frozen and are used only for evaluation.
 
-The supported benchmark target names are `inception_v3`, `inception_v4`,
-`inception_resnet_v2`, `resnet_v2`, `vgg16`, `vit_b_16`, and `swin_b`.
-`resnet_v2` uses the pre-activation `preresnet152` model supplied by
-`pytorchcv`, with a `timm` ResNet-v2 fallback when `pytorchcv` is unavailable.
-The model weights and the diffusion checkpoint are loaded by the user and are
-not included in this repository.
+The supported benchmark target names are `inception_v3`, `inception_v4`, `inception_resnet_v2`, `resnet_v2`, `vgg16`, `vit_b_16`, and `swin_b`. `resnet_v2` uses the pre-activation `preresnet152` model supplied by `pytorchcv`, with a `timm` ResNet-v2 fallback when `pytorchcv` is unavailable. The model weights and the diffusion checkpoint are loaded by the user and are not included in this repository.
 
 ## Reproducibility notes
 
-The paper configuration uses `N_diff=50`, `tau*=25`, `r=0.10`, `K=2`,
-`epsilon=16/255`, `lambda_attn=10`, and `lambda_div=1000`. Here, `K` is the
-number of sampled attention supports per training example. The exact diffusion
-checkpoint, scheduler and library versions, surrogate model and target layer,
-preprocessing, data manifest, and random seed should be recorded with every
-run. Do not commit private checkpoints or generated adversarial images.
+The paper configuration uses `N_diff=50`, `tau*=25`, `r=0.10`, `K=2`, `epsilon=16/255`, `lambda_attn=10`, and `lambda_div=1000`. Here, `K` is the number of sampled attention supports per training example. Record the diffusion checkpoint, scheduler and library versions, surrogate model and target layer, preprocessing, data manifest, and random seed with every run. Do not commit private checkpoints or generated adversarial images.
 
-The default diffusion arithmetic is `float32` because training differentiates
-through the frozen denoising and decoder path with respect to the latent
-variables. Set
-`diffusion_dtype` to `float16` only after validating mixed-precision training
-with the selected hardware, checkpoint, and Diffusers version.
+The default diffusion arithmetic is `float32` because training differentiates through the frozen denoising and decoder path with respect to the latent variables. Set `diffusion_dtype` to `float16` only after validating mixed-precision training with the selected hardware, checkpoint, and Diffusers version.
 
-The repository provides the method implementation and stores the attack-shape
-and diffusion configuration in each generator checkpoint. The checkpoint does
-not contain the diffusion or classifier weights, software-version metadata, or
-benchmark labels. Numerical reproduction therefore requires supplying the same
-model weights, scheduler/library versions, preprocessing, and labels used for
-the reported tables. The included smoke test uses a tiny classifier and the
-toy latent adapter; it checks tensor shapes, finite losses, and backward
-connectivity, but it is not a substitute for the ImageNet/NeurIPS evaluation.
+The repository stores the attack-shape and diffusion configuration in each generator checkpoint. The checkpoint does not contain the diffusion or classifier weights, software-version metadata, or benchmark labels. Numerical reproduction therefore requires supplying the same model weights, scheduler and library versions, preprocessing, and labels used for the reported tables.
 
 ## Citation
 
@@ -146,4 +95,3 @@ connectivity, but it is not a substitute for the ImageNet/NeurIPS evaluation.
   year={2026}
 }
 ```
-

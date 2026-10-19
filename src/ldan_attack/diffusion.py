@@ -1,10 +1,8 @@
 """Adapters for the frozen latent-diffusion backbone.
 
-The repository does not ship a diffusion checkpoint.  ``DiffusersLatentAdapter``
-loads the checkpoint supplied by the user and keeps all diffusion parameters
-frozen.  The VAE encode/decode path is available for quick checks; setting
-``use_ddim=True`` enables the DDIM inverse/denoise path when the installed
-Diffusers version provides the required scheduler classes.
+The repository does not ship a diffusion checkpoint. ``DiffusersLatentAdapter``
+loads the checkpoint supplied by the user, keeps all diffusion parameters
+frozen, and follows the DDIM inverse/denoise path used by the paper.
 """
 
 from typing import Optional
@@ -30,10 +28,10 @@ class DiffusionLatentAdapter(nn.Module):
 
 
 class DiffusersLatentAdapter(DiffusionLatentAdapter):
-    """Stable-Diffusion VAE adapter with an optional DDIM trajectory."""
+    """Stable-Diffusion adapter with the paper's DDIM trajectory."""
 
     def __init__(self, model_id: str, device: torch.device, diffusion_steps: int = 50,
-                 use_ddim: bool = False, dtype: Optional[torch.dtype] = None):
+                 dtype: Optional[torch.dtype] = None):
         super().__init__()
         try:
             from diffusers import AutoencoderKL, DDIMScheduler, UNet2DConditionModel
@@ -44,7 +42,6 @@ class DiffusersLatentAdapter(DiffusionLatentAdapter):
             ) from exc
 
         self.device = device
-        self.use_ddim = use_ddim
         self.diffusion_steps = diffusion_steps
         # The training objective differentiates through the frozen decoder.
         # Float32 is the safe default; callers may opt into fp16 explicitly.
@@ -57,26 +54,25 @@ class DiffusersLatentAdapter(DiffusionLatentAdapter):
         self.inverse_scheduler = None
         self.text_encoder = None
         self.tokenizer = None
-        if use_ddim:
-            try:
-                from diffusers import DDIMInverseScheduler
+        try:
+            from diffusers import DDIMInverseScheduler
 
-                self.unet = UNet2DConditionModel.from_pretrained(
-                    model_id, subfolder="unet", torch_dtype=dtype
-                ).to(device).eval()
-                self.scheduler = DDIMScheduler.from_pretrained(model_id, subfolder="scheduler")
-                self.inverse_scheduler = DDIMInverseScheduler.from_config(self.scheduler.config)
-                from transformers import CLIPTextModel, CLIPTokenizer
+            self.unet = UNet2DConditionModel.from_pretrained(
+                model_id, subfolder="unet", torch_dtype=dtype
+            ).to(device).eval()
+            self.scheduler = DDIMScheduler.from_pretrained(model_id, subfolder="scheduler")
+            self.inverse_scheduler = DDIMInverseScheduler.from_config(self.scheduler.config)
+            from transformers import CLIPTextModel, CLIPTokenizer
 
-                self.tokenizer = CLIPTokenizer.from_pretrained(model_id, subfolder="tokenizer")
-                self.text_encoder = CLIPTextModel.from_pretrained(
-                    model_id, subfolder="text_encoder", torch_dtype=dtype
-                ).to(device).eval()
-            except (ImportError, OSError) as exc:
-                raise RuntimeError(
-                    "use_ddim=True requires a complete Stable-Diffusion checkpoint and "
-                    "a Diffusers version containing DDIMInverseScheduler."
-                ) from exc
+            self.tokenizer = CLIPTokenizer.from_pretrained(model_id, subfolder="tokenizer")
+            self.text_encoder = CLIPTextModel.from_pretrained(
+                model_id, subfolder="text_encoder", torch_dtype=dtype
+            ).to(device).eval()
+        except (ImportError, OSError) as exc:
+            raise RuntimeError(
+                "The paper implementation requires a complete Stable-Diffusion checkpoint "
+                "and a Diffusers version containing DDIMInverseScheduler."
+            ) from exc
         for module in (self.vae, self.unet, self.text_encoder):
             if module is not None:
                 for parameter in module.parameters():
@@ -103,8 +99,6 @@ class DiffusersLatentAdapter(DiffusionLatentAdapter):
 
     def encode(self, images: Tensor, tau_star: int) -> Tensor:
         latents = self._vae_encode(images)
-        if not self.use_ddim:
-            return latents.float()
         self.inverse_scheduler.set_timesteps(self.diffusion_steps, device=images.device)
         embeddings = self._empty_prompt_embeddings(images.shape[0])
         # DDIM inversion moves from the clean latent toward the requested
@@ -118,12 +112,6 @@ class DiffusersLatentAdapter(DiffusionLatentAdapter):
 
     def decode(self, latents: Tensor, tau_star: int, output_size) -> Tensor:
         latents = latents.to(self.compute_dtype)
-        if not self.use_ddim:
-            decoded = self.vae.decode(latents / self.scaling_factor).sample
-            decoded = decoded.float()
-            return decoded if decoded.shape[-2:] == tuple(output_size) else F.interpolate(
-                decoded, size=output_size, mode="bilinear", align_corners=False
-            )
         self.scheduler.set_timesteps(self.diffusion_steps, device=latents.device)
         embeddings = self._empty_prompt_embeddings(latents.shape[0])
         # The scheduler stores descending denoising timesteps.  Starting at

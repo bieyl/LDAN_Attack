@@ -15,7 +15,6 @@ from ldan_attack.config import AttackConfig
 from ldan_attack.diffusion import DiffusersLatentAdapter
 from ldan_attack.models import build_classifier, default_target_layer
 from ldan_attack.pipeline import LatentAttentionAttack
-from ldan_attack.toy import ToyLatentAdapter
 from ldan_attack.utils import make_imagefolder, seed_everything
 
 
@@ -25,12 +24,6 @@ def parse_args():
     parser.add_argument("--surrogate", default=None)
     parser.add_argument("--target-layer", default=None)
     parser.add_argument("--device", default=None)
-    parser.add_argument("--use-ddim", dest="use_ddim", action="store_true", default=True,
-                        help="Use the paper's DDIM inversion/denoising path (default).")
-    parser.add_argument("--no-ddim", dest="use_ddim", action="store_false",
-                        help="Use the VAE-only adapter for debugging; not a paper run.")
-    parser.add_argument("--toy-diffusion", action="store_true",
-                        help="Use the shape-test adapter; never use it for paper results.")
     return parser.parse_args()
 
 
@@ -65,16 +58,12 @@ def main():
                 )
             )
         config.target_layer = default_target_layer(config.surrogate, surrogate)
-    if args.toy_diffusion:
-        diffusion = ToyLatentAdapter().to(device)
-    else:
-        diffusion = DiffusersLatentAdapter(
-            config.diffusion_model,
-            device=device,
-            diffusion_steps=config.diffusion_steps,
-            use_ddim=args.use_ddim,
-            dtype=diffusion_dtype,
-        )
+    diffusion = DiffusersLatentAdapter(
+        config.diffusion_model,
+        device=device,
+        diffusion_steps=config.diffusion_steps,
+        dtype=diffusion_dtype,
+    )
     attack = LatentAttentionAttack(surrogate, diffusion, config).to(device)
 
     first_images, first_labels = next(iter(loader))
@@ -114,7 +103,6 @@ def main():
         "config": config.__dict__,
         "surrogate": config.surrogate,
         "target_layer": config.target_layer,
-        "use_ddim": bool(args.use_ddim),
     }
     path = output_dir / (config.surrogate + "_latent_attention.pt")
     torch.save(checkpoint, path)
